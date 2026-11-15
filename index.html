@@ -34,10 +34,10 @@
       transition: transform 2s ease-in-out, opacity 1.5s ease-in-out;
       width: 90%;
       max-width: 800px;
-      opacity: 0.75; /* 기본 활성 상태 밝기 느낌 (아이패드 밝기 100% 기준 약 70~75% 수준) */
+      opacity: 0.75; /* 기본 활성 상태 밝기 느낌 */
     }
 
-    /* 3분 경과 후 화면 암전(0%) 상태 */
+    /* 1분 경과 후 화면 암전(0%) 상태 */
     #aod-container.dimmed {
       opacity: 0;
     }
@@ -146,7 +146,7 @@
     // ==========================================
     // [사용자 설정 영역]
     // ==========================================
-    const ACTIVE_DURATION_SEC = 60; // 터치 후 화면 유지 시간 (1분 = 60초)
+    const ACTIVE_DURATION_SEC = 60;  // 터치 후 화면 유지 시간 (1분 = 60초)
     const ACTIVE_OPACITY = 0.7;      // 활성 시 텍스트/요소 밝기 비율 (0.7 = 70%)
     const FORECAST_HOURS = 6;        // 시간별 예보 표시 개수
     
@@ -166,28 +166,24 @@
 
     let dimTimer = null;
 
-    // 1. 터치 반응형 3분 타이머 제어 함수
+    // 1. 터치 반응형 타이머 제어 함수
     function wakeScreen() {
-      // 화면 밝기(불투명도)를 70%로 복구
       container.classList.remove('dimmed');
       container.style.opacity = ACTIVE_OPACITY;
 
-      // 기존 타이머가 있다면 초기화 (터치할 때마다 3분 연장)
       if (dimTimer) {
         clearTimeout(dimTimer);
       }
 
-      // 3분(180,000ms) 후 밝기 0%로 서서히 암전
+      // 지정된 시간(60초) 후 밝기 0%로 서서히 암전
       dimTimer = setTimeout(() => {
         container.style.opacity = '0';
         container.classList.add('dimmed');
       }, ACTIVE_DURATION_SEC * 1000);
 
-      // 터치할 때마다 화면 꺼짐 방지(Wake Lock) 재확인
       requestWakeLock();
     }
 
-    // 화면 전체 어디든 터치하거나 클릭하면 3분 타이머 작동
     document.body.addEventListener('touchstart', wakeScreen, { passive: true });
     document.body.addEventListener('click', wakeScreen);
 
@@ -326,7 +322,6 @@
       if (document.visibilityState === 'visible') wakeScreen();
     });
 
-    // 페이지 최초 로드 시 3분 타이머 시작
     wakeScreen();
   </script>
 </body>
