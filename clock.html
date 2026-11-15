@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <title>iPad Interactive AOD & Calendar</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: #000000;
+      color: #e0e0e0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* 전체 화면 밝기(1분 암전) 제어 래퍼 */
+    #master-wrapper {
+      width: 100%;
+      height: 100%;
+      opacity: 0.75;
+      transition: opacity 1.5s ease-in-out;
+    }
+
+    #master-wrapper.dimmed {
+      opacity: 0;
+    }
+
+    /* 좌우 슬라이드 컨테이너 (시계 ↔ 달력) */
+    #slider {
+      display: flex;
+      width: 200vw;
+      height: 100vh;
+      transition: transform 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+    }
+
+    .page {
+      width: 100vw;
+      height: 100vh;
+      flex-shrink: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    /* ==================== 1페이지: 시계 및 날씨 ==================== */
+    #aod-container {
+      text-align: center;
+      transition: transform 2s ease-in-out;
+      width: 90%;
+      max-width: 820px;
+    }
+
+    #date {
+      font-size: 1.9rem;
+      font-weight: 400;
+      color: #999999;
+      margin-bottom: 6px;
+      letter-spacing: 1px;
+    }
+
+    #clock-wrapper {
+      display: flex;
+      justify-content: center;
+      align-items: baseline;
+    }
+
+    #clock {
+      font-size: 8.8rem;
+      font-weight: 700;
+      letter-spacing: -3px;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+      color: #ffffff;
+    }
+
+    #seconds {
+      font-size: 2.6rem;
+      font-weight: 300;
+      color: #777777;
+      margin-left: 8px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* 가장 가까운 D-Day 배지 */
+    #dday-banner {
+      margin: 16px auto 4px auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background-color: #121212;
+      border: 1px solid #262626;
+      padding: 8px 20px;
+      border-radius: 999px;
+      font-size: 1.35rem;
+      color: #cccccc;
+    }
+
+    #dday-badge {
+      font-weight: 700;
+      color: #4da6ff;
+    }
+
+    #location-name {
+      margin-top: 12px;
+      font-size: 1.4rem;
+      color: #999999;
+    }
+
+    #current-weather {
+      margin-top: 6px;
+      font-size: 2.1rem;
+      font-weight: 500;
+      color: #dddddd;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 12px;
+    }
+
+    #hourly-weather {
+      margin-top: 22px;
+      padding-top: 18px;
+      border-top: 1px solid #222222;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .hour-item {
+      flex: 1;
+      background-color: #0d0d0d;
+      border: 1px solid #1a1a1a;
+      border-radius: 14px;
+      padding: 10px 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .hour-time { font-size: 1.05rem; color: #888888; font-variant-numeric: tabular-nums; }
+    .hour-icon { font-size: 1.7rem; }
+    .hour-temp { font-size: 1.35rem; font-weight: 600; color: #cccccc; font-variant-numeric: tabular-nums; }
+
+    /* ==================== 2페이지: 싱글 월 달력 (상하 조작) ==================== */
+    #calendar-page {
+      flex-direction: column;
+      justify-content: center;
+      gap: 14px;
+    }
+
+    .cal-header-guide {
+      font-size: 1.1rem;
+      color: #777777;
+      text-align: center;
+    }
+
+    .month-container {
+      background-color: #0a0a0a;
+      border: 1px solid #1e1e1e;
+      border-radius: 22px;
+      padding: 24px 28px;
+      width: 100%;
+      max-width: 540px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      transition: transform 0.25s ease, opacity 0.25s ease;
+    }
+
+    .month-header-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+
+    .nav-btn {
+      background: #161616;
+      border: 1px solid #2a2a2a;
+      color: #cccccc;
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      font-size: 1.2rem;
+      cursor: pointer;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .nav-btn:active {
+      background-color: #2e2e2e;
+    }
+
+    .month-title {
+      font-size: 1.6rem;
+      font-weight: 600;
+      color: #ffffff;
+      letter-spacing: 0.5px;
+    }
+
+    .weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      text-align: center;
+      font-size: 1rem;
+      color: #666666;
+      margin-bottom: 12px;
+    }
+
+    .weekdays span:first-child { color: #cc5555; }
+    .weekdays span:last-child { color: #5588cc; }
+
+    .days-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 8px;
+    }
+
+    .day-cell {
+      aspect-ratio: 1 / 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      border-radius: 12px;
+      font-size: 1.2rem;
+      color: #cccccc;
+      position: relative;
+      cursor: pointer;
+    }
+
+    .day-cell:active {
+      background-color: #222222;
+    }
+
+    .day-cell.empty {
+      cursor: default;
+    }
+
+    .day-cell.sun { color: #e06666; }
+    .day-cell.sat { color: #6fa8dc; }
+
+    .day-cell.today {
+      border: 1px solid #4da6ff;
+      background-color: rgba(77, 166, 255, 0.12);
+      font-weight: 700;
+      color: #ffffff;
+    }
+
+    .event-dot {
+      width: 6px;
+      height: 6px;
+      background-color: #4da6ff;
+      border-radius: 50%;
+      margin-top: 4px;
+    }
+
+    /* 하단 페이지 인디케이터 */
+    #page-dots {
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      z-index: 10;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background-color: #333333;
+      transition: background-color 0.3s, width 0.3s;
+    }
+
+    .dot.active {
+      background-color: #888888;
+      width: 18px;
+      border-radius: 4px;
+    }
+
+    /* ==================== 일정 추가/확인 모달 ==================== */
+    #modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background-color: rgba(0, 0, 0, 0.8);
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+
+    #modal-backdrop.open {
+      display: flex;
+    }
+
+    #modal-box {
+      background-color: #141414;
+      border: 1px solid #2e2e2e;
+      border-radius: 20px;
+      padding: 24px;
+      width: 90%;
+      max-width: 400px;
+      color: #ffffff;
+    }
+
+    #modal-date-title {
+      font-size: 1.3rem;
+      font-weight: 600;
+      margin-bottom: 14px;
+      color: #4da6ff;
+    }
+
+    #modal-event-list {
+      margin-bottom: 16px;
+      max-height: 150px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .saved-event-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background-color: #1f1f1f;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 1.05rem;
+    }
+
+    .delete-btn {
+      background: none;
+      border: none;
+      color: #ff6666;
+      font-size: 0.95rem;
+      padding: 4px 8px;
+      cursor: pointer;
+    }
+
+    #event-input {
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid #333333;
+      background-color: #0a0a0a;
+      color: #ffffff;
+      font-size: 1.05rem;
+      margin-bottom: 14px;
+      outline: none;
+      user-select: text;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    .modal-btn {
+      padding: 10px 18px;
+      border-radius: 10px;
+      border: none;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-cancel { background-color: #262626; color: #cccccc; }
+    .btn-save { background-color: #4da6ff; color: #000000; }
+  </style>
+</head>
+<body>
+
+  <div id="master-wrapper">
+    <div id="slider">
+      <!-- 1페이지: 시계 & D-Day & 날씨 -->
+      <div class="page">
+        <div id="aod-container">
+          <div id="date">2026년 11월 15일 일요일</div>
+          <div id="clock-wrapper">
+            <span id="clock">00:00</span><span id="seconds">00</span>
+          </div>
+          <div id="dday-banner">
+            <span id="dday-badge">D-Day</span>
+            <span id="dday-title">등록된 일정이 없습니다 (좌로 밀어 달력 열기)</span>
+          </div>
+          <div id="location-name">위치 확인 중...</div>
+          <div id="current-weather">날씨 불러오는 중...</div>
+          <div id="hourly-weather"></div>
+        </div>
+      </div>
+
+      <!-- 2페이지: 싱글 월 달력 (위아래 스와이프 또는 버튼으로 월 전환) -->
+      <div class="page" id="calendar-page">
+        <div class="cal-header-guide">↕ 위아래로 밀거나 버튼을 눌러 다른 달을 확인하세요 (우로 밀어 시계 복귀)</div>
+        <div class="month-container">
+          <div class="month-header-nav">
+            <button class="nav-btn" id="prev-month-btn">◀</button>
+            <div class="month-title" id="month-title-text">2026년 11월</div>
+            <button class="nav-btn" id="next-month-btn">▶</button>
+          </div>
+          <div class="weekdays">
+            <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+          </div>
+          <div class="days-grid" id="single-days-grid"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 하단 페이지 표시 점 -->
+    <div id="page-dots">
+      <div class="dot active" id="dot-0"></div>
+      <div class="dot" id="dot-1"></div>
+    </div>
+  </div>
+
+  <!-- 날짜 클릭 모달 -->
+  <div id="modal-backdrop">
+    <div id="modal-box">
+      <div id="modal-date-title">2026-11-15</div>
+      <div id="modal-event-list"></div>
+      <input type="text" id="event-input" placeholder="일정 제목 입력 (예: 가족 여행)" maxlength="25">
+      <div class="modal-actions">
+        <button class="modal-btn btn-cancel" id="close-modal-btn">닫기</button>
+        <button class="modal-btn btn-save" id="save-event-btn">추가</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ==========================================
+    // [사용자 설정 영역]
+    // ==========================================
+    const ACTIVE_DURATION_SEC = 60;  // 터치 후 화면 유지 시간 (1분 = 60초)
+    const ACTIVE_OPACITY = 0.75;
+    const FORECAST_HOURS = 6;
+    const DEFAULT_LAT = 37.5034;
+    const DEFAULT_LON = 126.7660;
+    const DEFAULT_LOCATION_NAME = "부천시";
+    // ==========================================
+
+    const masterWrapper = document.getElementById('master-wrapper');
+    const slider = document.getElementById('slider');
+    const aodContainer = document.getElementById('aod-container');
+    const clockEl = document.getElementById('clock');
+    const secondsEl = document.getElementById('seconds');
+    const dateEl = document.getElementById('date');
+    const ddayBadgeEl = document.getElementById('dday-badge');
+    const ddayTitleEl = document.getElementById('dday-title');
+    const locationNameEl = document.getElementById('location-name');
+    const currentWeatherEl = document.getElementById('current-weather');
+    const hourlyWeatherEl = document.getElementById('hourly-weather');
+
+    const monthTitleText = document.getElementById('month-title-text');
+    const singleDaysGrid = document.getElementById('single-days-grid');
+    const calendarPageEl = document.getElementById('calendar-page');
+
+    const modalBackdrop = document.getElementById('modal-backdrop');
+    const modalDateTitle = document.getElementById('modal-date-title');
+    const modalEventList = document.getElementById('modal-event-list');
+    const eventInput = document.getElementById('event-input');
+
+    let dimTimer = null;
+    let currentPage = 0; // 0: 시계, 1: 달력
+    let selectedDateStr = '';
+
+    // 현재 달력에 보여주고 있는 연/월 상태
+    let calendarViewDate = new Date();
+
+    let eventsData = JSON.parse(localStorage.getItem('ipad_aod_events') || '{}');
+
+    function saveEventsToStorage() {
+      localStorage.setItem('ipad_aod_events', JSON.stringify(eventsData));
+    }
+
+    function wakeScreen() {
+      masterWrapper.classList.remove('dimmed');
+      masterWrapper.style.opacity = ACTIVE_OPACITY;
+
+      if (dimTimer) clearTimeout(dimTimer);
+      dimTimer = setTimeout(() => {
+        masterWrapper.style.opacity = '0';
+        masterWrapper.classList.add('dimmed');
+      }, ACTIVE_DURATION_SEC * 1000);
+
+      requestWakeLock();
+    }
+
+    // 터치 스와이프 제어 (좌우: 페이지 전환, 상하(달력페이지안): 월 전환)
+    let touchStartX = 0;
+    let touchStartY = 0;
+
+    document.addEventListener('touchstart', (e) => {
+      wakeScreen();
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+
+    document.addEventListener('click', wakeScreen);
+
+    document.addEventListener('touchend', (e) => {
+      if (modalBackdrop.classList.contains('open')) return;
+
+      const touchEndX = e.changedTouches[0].clientX;
+      const touchEndY = e.changedTouches[0].clientY;
+      const diffX = touchEndX - touchStartX;
+      const diffY = touchEndY - touchStartY;
+
+      if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
+        if (diffX < 0 && currentPage === 0) {
+          goToPage(1);
+        } else if (diffX > 0 && currentPage === 1) {
+          goToPage(0);
+        }
+      } else if (currentPage === 1 && Math.abs(diffY) > Math.abs(diffX) && Math.abs(diffY) > 50) {
+        // 달력 페이지에서의 상하 스와이프: 위로 밀면 다음 달, 아래로 밀면 이전 달
+        if (diffY < 0) {
+          changeMonth(1);  // 다음 달
+        } else {
+          changeMonth(-1); // 이전 달
+        }
+      }
+    }, { passive: true });
+
+    function goToPage(pageIndex) {
+      currentPage = pageIndex;
+      slider.style.transform = `translateX(-${pageIndex * 100}vw)`;
+      document.getElementById('dot-0').classList.toggle('active', pageIndex === 0);
+      document.getElementById('dot-1').classList.toggle('active', pageIndex === 1);
+      if (pageIndex === 1) renderSingleMonth();
+    }
+
+    // 월 변경 함수 (+1: 다음 달, -1: 이전 달)
+    function changeMonth(delta) {
+      calendarViewDate.setMonth(calendarViewDate.getMonth() + delta);
+      renderSingleMonth();
+    }
+
+    document.getElementById('prev-month-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      changeMonth(-1);
+    });
+
+    document.getElementById('next-month-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      changeMonth(1);
+    });
+
+    // 싱글 월 달력 렌더링
+    function renderSingleMonth() {
+      singleDaysGrid.innerHTML = '';
+      const year = calendarViewDate.getFullYear();
+      const month = calendarViewDate.getMonth(); // 0-indexed
+
+      monthTitleText.textContent = `${year}년 ${month + 1}월`;
+
+      const now = new Date();
+      const todayStr = formatDateStr(now.getFullYear(), now.getMonth() + 1, now.getDate());
+
+      const firstDayOfWeek = new Date(year, month, 1).getDay();
+      const lastDate = new Date(year, month + 1, 0).getDate();
+
+      for (let i = 0; i < firstDayOfWeek; i++) {
+        const emptyCell = document.createElement('div');
+        emptyCell.className = 'day-cell empty';
+        singleDaysGrid.appendChild(emptyCell);
+      }
+
+      for (let d = 1; d <= lastDate; d++) {
+        const dateStr = formatDateStr(year, month + 1, d);
+        const dayOfWeek = new Date(year, month, d).getDay();
+
+        const cell = document.createElement('div');
+        cell.className = 'day-cell';
+        if (dayOfWeek === 0) cell.classList.add('sun');
+        if (dayOfWeek === 6) cell.classList.add('sat');
+        if (dateStr === todayStr) cell.classList.add('today');
+
+        const numSpan = document.createElement('span');
+        numSpan.textContent = d;
+        cell.appendChild(numSpan);
+
+        if (eventsData[dateStr] && eventsData[dateStr].length > 0) {
+          const dot = document.createElement('div');
+          dot.className = 'event-dot';
+          cell.appendChild(dot);
+        }
+
+        cell.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openDateModal(dateStr);
+        });
+
+        singleDaysGrid.appendChild(cell);
+      }
+    }
+
+    function formatDateStr(y, m, d) {
+      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    }
+
+    // 시계 및 가장 가까운 D-Day 업데이트
+    function updateClockAndDDay() {
+      const now = new Date();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+
+      clockEl.textContent = `${hours}:${minutes}`;
+      secondsEl.textContent = seconds;
+
+      const days = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
+      dateEl.textContent = `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일 ${days[now.getDay()]}`;
+
+      updateNearestDDay(now);
+    }
+
+    function updateNearestDDay(now) {
+      const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      let nearestDiffDays = Infinity;
+      let nearestTitle = '';
+
+      for (const [dateStr, titles] of Object.entries(eventsData)) {
+        if (!titles || titles.length === 0) continue;
+        const [y, m, d] = dateStr.split('-').map(Number);
+        const targetMidnight = new Date(y, m - 1, d).getTime();
+        const diffDays = Math.round((targetMidnight - todayMidnight) / (1000 * 60 * 60 * 24));
+
+        if (diffDays >= 0 && diffDays < nearestDiffDays) {
+          nearestDiffDays = diffDays;
+          nearestTitle = titles[0];
+        }
+      }
+
+      if (nearestDiffDays === Infinity) {
+        ddayBadgeEl.textContent = '📅';
+        ddayTitleEl.textContent = '예정된 D-Day 없음 (좌로 밀어 일정 추가)';
+      } else if (nearestDiffDays === 0) {
+        ddayBadgeEl.textContent = 'D-Day';
+        ddayTitleEl.textContent = `오늘: ${nearestTitle}`;
+      } else {
+        ddayBadgeEl.textContent = `D-${nearestDiffDays}`;
+        ddayTitleEl.textContent = nearestTitle;
+      }
+    }
+
+    // 날짜 클릭 모달
+    function openDateModal(dateStr) {
+      selectedDateStr = dateStr;
+      modalDateTitle.textContent = `${dateStr} 일정 관리`;
+      eventInput.value = '';
+      renderModalEventList();
+      modalBackdrop.classList.add('open');
+    }
+
+    function renderModalEventList() {
+      modalEventList.innerHTML = '';
+      const list = eventsData[selectedDateStr] || [];
+
+      if (list.length === 0) {
+        modalEventList.innerHTML = '<div style="color:#666; font-size:0.95rem;">등록된 일정이 없습니다.</div>';
+        return;
+      }
+
+      list.forEach((title, idx) => {
+        const item = document.createElement('div');
+        item.className = 'saved-event-item';
+        item.innerHTML = `<span>${title}</span>`;
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'delete-btn';
+        delBtn.textContent = '삭제';
+        delBtn.addEventListener('click', () => {
+          eventsData[selectedDateStr].splice(idx, 1);
+          if (eventsData[selectedDateStr].length === 0) delete eventsData[selectedDateStr];
+          saveEventsToStorage();
+          renderModalEventList();
+          renderSingleMonth();
+          updateNearestDDay(new Date());
+        });
+
+        item.appendChild(delBtn);
+        modalEventList.appendChild(item);
+      });
+    }
+
+    document.getElementById('save-event-btn').addEventListener('click', () => {
+      const val = eventInput.value.trim();
+      if (!val) return;
+
+      if (!eventsData[selectedDateStr]) eventsData[selectedDateStr] = [];
+      eventsData[selectedDateStr].push(val);
+      saveEventsToStorage();
+
+      eventInput.value = '';
+      renderModalEventList();
+      renderSingleMonth();
+      updateNearestDDay(new Date());
+    });
+
+    document.getElementById('close-modal-btn').addEventListener('click', () => {
+      modalBackdrop.classList.remove('open');
+    });
+
+    function shiftPosition() {
+      const offsetX = Math.floor(Math.random() * 31) - 15;
+      const offsetY = Math.floor(Math.random() * 31) - 15;
+      aodContainer.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+    }
+
+    function initLocationAndWeather() {
+      if ('geolocation' in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            fetchLocationName(pos.coords.latitude, pos.coords.longitude);
+            fetchWeather(pos.coords.latitude, pos.coords.longitude);
+          },
+          () => {
+            locationNameEl.textContent = DEFAULT_LOCATION_NAME;
+            fetchWeather(DEFAULT_LAT, DEFAULT_LON);
+          },
+          { timeout: 10000, maximumAge: 60000 }
+        );
+      } else {
+        locationNameEl.textContent = DEFAULT_LOCATION_NAME;
+        fetchWeather(DEFAULT_LAT, DEFAULT_LON);
+      }
+    }
+
+    async function fetchLocationName(lat, lon) {
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&accept-language=ko`);
+        const data = await res.json();
+        const addr = data.address;
+        const city = addr.city || addr.county || addr.municipality || "";
+        const borough = addr.borough || addr.suburb || addr.town || addr.village || "";
+        locationNameEl.textContent = `${city} ${borough}`.trim() || "현재 위치";
+      } catch (e) {
+        locationNameEl.textContent = "현재 위치";
+      }
+    }
+
+    async function fetchWeather(lat, lon) {
+      try {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=temperature_2m,weathercode&timezone=auto&forecast_days=2`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        const currentTemp = Math.round(data.current_weather.temperature);
+        const currentInfo = getWeatherDescription(data.current_weather.weathercode);
+        currentWeatherEl.innerHTML = `<span>${currentInfo.icon}</span> <span>${currentTemp}°C</span> <span style="font-size: 1.4rem; color: #888;">${currentInfo.text}</span>`;
+
+        const now = new Date();
+        const currentPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}T${String(now.getHours()).padStart(2, '0')}:00`;
+
+        const times = data.hourly.time;
+        const temps = data.hourly.temperature_2m;
+        const codes = data.hourly.weathercode;
+
+        let startIndex = times.findIndex(t => t === currentPrefix);
+        if (startIndex === -1) startIndex = 0;
+
+        let hourlyHTML = '';
+        for (let i = 1; i <= FORECAST_HOURS; i++) {
+          const idx = startIndex + i;
+          if (idx < times.length) {
+            const hourLabel = times[idx].split('T')[1].substring(0, 5);
+            const temp = Math.round(temps[idx]);
+            const info = getWeatherDescription(codes[idx]);
+
+            hourlyHTML += `
+              <div class="hour-item">
+                <div class="hour-time">${hourLabel}</div>
+                <div class="hour-icon">${info.icon}</div>
+                <div class="hour-temp">${temp}°</div>
+              </div>
+            `;
+          }
+        }
+        hourlyWeatherEl.innerHTML = hourlyHTML;
+      } catch (e) {
+        currentWeatherEl.textContent = '날씨 정보 연결 대기중';
+      }
+    }
+
+    function getWeatherDescription(code) {
+      if (code === 0) return { icon: '☀️', text: '맑음' };
+      if (code >= 1 && code <= 3) return { icon: '⛅', text: '구름 조금' };
+      if (code >= 45 && code <= 48) return { icon: '🌫️', text: '안개' };
+      if (code >= 51 && code <= 67) return { icon: '🌧️', text: '비' };
+      if (code >= 71 && code <= 77) return { icon: '❄️', text: '눈' };
+      if (code >= 80 && code <= 82) return { icon: '🌦️', text: '소나기' };
+      if (code >= 95) return { icon: '⛈️', text: '뇌우' };
+      return { icon: '☁️', text: '흐림' };
+    }
+
+    async function requestWakeLock() {
+      try {
+        if ('wakeLock' in navigator) await navigator.wakeLock.request('screen');
+      } catch (err) {}
+    }
+
+    // 초기 실행
+    updateClockAndDDay();
+    setInterval(updateClockAndDDay, 1000);
+
+    renderSingleMonth();
+    shiftPosition();
+    setInterval(shiftPosition, 120000);
+
+    initLocationAndWeather();
+    setInterval(initLocationAndWeather, 1800000);
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') wakeScreen();
+    });
+
+    wakeScreen();
+  </script>
+</body>
+</html>
