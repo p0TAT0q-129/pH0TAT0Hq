@@ -42,7 +42,7 @@
       display: flex;
       width: 200vw;
       height: 100vh;
-      transition: transform 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+      transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     }
 
     .page {
@@ -176,7 +176,6 @@
       width: 100%;
       max-width: 540px;
       box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-      transition: transform 0.25s ease, opacity 0.25s ease;
     }
 
     .month-header-nav {
@@ -406,9 +405,9 @@
         </div>
       </div>
 
-      <!-- 2페이지: 싱글 월 달력 (위아래 스와이프 또는 버튼으로 월 전환) -->
+      <!-- 2페이지: 싱글 월 달력 -->
       <div class="page" id="calendar-page">
-        <div class="cal-header-guide">↕ 위아래로 밀거나 버튼을 눌러 다른 달을 확인하세요 (우로 밀어 시계 복귀)</div>
+        <div class="cal-header-guide">↕ 위아래로 밀거나 버튼을 눌러 달을 변경하세요 (우로 밀어 시계 복귀)</div>
         <div class="month-container">
           <div class="month-header-nav">
             <button class="nav-btn" id="prev-month-btn">◀</button>
@@ -469,7 +468,6 @@
 
     const monthTitleText = document.getElementById('month-title-text');
     const singleDaysGrid = document.getElementById('single-days-grid');
-    const calendarPageEl = document.getElementById('calendar-page');
 
     const modalBackdrop = document.getElementById('modal-backdrop');
     const modalDateTitle = document.getElementById('modal-date-title');
@@ -480,9 +478,7 @@
     let currentPage = 0; // 0: 시계, 1: 달력
     let selectedDateStr = '';
 
-    // 현재 달력에 보여주고 있는 연/월 상태
     let calendarViewDate = new Date();
-
     let eventsData = JSON.parse(localStorage.getItem('ipad_aod_events') || '{}');
 
     function saveEventsToStorage() {
@@ -502,7 +498,7 @@
       requestWakeLock();
     }
 
-    // 터치 스와이프 제어 (좌우: 페이지 전환, 상하(달력페이지안): 월 전환)
+    // 터치 스와이프 제어 (민감도 및 좌표 인식 안정화)
     let touchStartX = 0;
     let touchStartY = 0;
 
@@ -522,14 +518,16 @@
       const diffX = touchEndX - touchStartX;
       const diffY = touchEndY - touchStartY;
 
-      if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
+      // 좌우 스와이프 (임계값 40px로 부드럽게 조정)
+      if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 40) {
         if (diffX < 0 && currentPage === 0) {
-          goToPage(1);
+          goToPage(1); // 시계 -> 달력
         } else if (diffX > 0 && currentPage === 1) {
-          goToPage(0);
+          goToPage(0); // 달력 -> 시계
         }
-      } else if (currentPage === 1 && Math.abs(diffY) > Math.abs(diffX) && Math.abs(diffY) > 50) {
-        // 달력 페이지에서의 상하 스와이프: 위로 밀면 다음 달, 아래로 밀면 이전 달
+      } 
+      // 달력 페이지에서의 상하 스와이프 (월 전환)
+      else if (currentPage === 1 && Math.abs(diffY) > Math.abs(diffX) && Math.abs(diffY) > 40) {
         if (diffY < 0) {
           changeMonth(1);  // 다음 달
         } else {
@@ -546,7 +544,6 @@
       if (pageIndex === 1) renderSingleMonth();
     }
 
-    // 월 변경 함수 (+1: 다음 달, -1: 이전 달)
     function changeMonth(delta) {
       calendarViewDate.setMonth(calendarViewDate.getMonth() + delta);
       renderSingleMonth();
@@ -562,11 +559,10 @@
       changeMonth(1);
     });
 
-    // 싱글 월 달력 렌더링
     function renderSingleMonth() {
       singleDaysGrid.innerHTML = '';
       const year = calendarViewDate.getFullYear();
-      const month = calendarViewDate.getMonth(); // 0-indexed
+      const month = calendarViewDate.getMonth();
 
       monthTitleText.textContent = `${year}년 ${month + 1}월`;
 
@@ -615,7 +611,6 @@
       return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     }
 
-    // 시계 및 가장 가까운 D-Day 업데이트
     function updateClockAndDDay() {
       const now = new Date();
       const hours = String(now.getHours()).padStart(2, '0');
@@ -660,7 +655,6 @@
       }
     }
 
-    // 날짜 클릭 모달
     function openDateModal(dateStr) {
       selectedDateStr = dateStr;
       modalDateTitle.textContent = `${dateStr} 일정 관리`;
