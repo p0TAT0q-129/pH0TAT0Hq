@@ -47,6 +47,12 @@
       transition: opacity 1.5s ease-in-out;
     }
 
+    /* 탁상시계 대기 모드: 날짜·시간·현재 날씨만 남기고 나머지는 숨겨 켜진 면적을 줄임 */
+    #hourly-weather, #dday-banner, #location-name { transition: opacity 1.5s ease-in-out; }
+    #master-wrapper.idle #hourly-weather,
+    #master-wrapper.idle #dday-banner,
+    #master-wrapper.idle #location-name { opacity: 0; }
+
     #master-wrapper.dimmed {
       opacity: 0;
     }
@@ -481,6 +487,7 @@
     // ==========================================
     const ACTIVE_DURATION_SEC = 60;
     const ACTIVE_OPACITY = 0.75;
+    const IDLE_OPACITY = 0.3;     // 터치 없을 때 밝기 (0이면 완전히 꺼짐, 탁상시계는 0.2~0.4 권장)
     const FORECAST_HOURS = 6;
     const DEFAULT_LAT = 37.5034;
     const DEFAULT_LON = 126.7660;
@@ -495,7 +502,7 @@
 
     // --- 번인 방지 ---
     const SHIFT_INTERVAL_SEC = 60;   // 위치를 옮기는 주기(초)
-    const SHIFT_RANGE_RATIO = 0.06;  // 화면 짧은 변 대비 최대 이동 범위
+    const SHIFT_RANGE_RATIO = 0.08;  // 화면 짧은 변 대비 최대 이동 범위
     // ==========================================
 
     const masterWrapper = document.getElementById('master-wrapper');
@@ -543,13 +550,13 @@
     }
 
     function wakeScreen() {
-      masterWrapper.classList.remove('dimmed');
+      masterWrapper.classList.remove('idle');
       masterWrapper.style.opacity = ACTIVE_OPACITY;
 
       if (dimTimer) clearTimeout(dimTimer);
       dimTimer = setTimeout(() => {
-        masterWrapper.style.opacity = '0';
-        masterWrapper.classList.add('dimmed');
+        masterWrapper.style.opacity = IDLE_OPACITY;
+        masterWrapper.classList.add('idle');
       }, ACTIVE_DURATION_SEC * 1000);
 
       requestWakeLock();
