@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <title>iPad Interactive AOD & Calendar</title>
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#000000">
+  <title>Interactive AOD & Calendar</title>
   <style>
     * {
       box-sizing: border-box;
@@ -69,15 +71,23 @@
       display: flex;
       justify-content: center;
       align-items: center;
-      padding: 20px;
+      padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right))
+              max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+    }
+
+    /* 번인 방지 이동용 래퍼: 화면 기준 px로 천천히 이동 (크기는 JS가 자동 맞춤) */
+    .shift-box {
+      flex: 0 0 auto;
+      transition: transform 3s ease-in-out;
     }
 
     /* ==================== 1페이지: 시계 및 날씨 ==================== */
+    #aod-shift { width: 820px; }
+
     #aod-container {
       text-align: center;
-      transition: transform 2s ease-in-out;
-      width: 90%;
-      max-width: 820px;
+      width: 100%;
+      transform-origin: center center;
     }
 
     #date {
@@ -114,6 +124,7 @@
     #dday-banner {
       margin: 16px auto 4px auto;
       display: inline-flex;
+      max-width: 100%;
       align-items: center;
       gap: 10px;
       background-color: #121212;
@@ -172,10 +183,15 @@
     .hour-temp { font-size: 1.35rem; font-weight: 600; color: #cccccc; font-variant-numeric: tabular-nums; }
 
     /* ==================== 2페이지: 싱글 월 달력 ==================== */
-    #calendar-page {
+    #cal-shift { width: 540px; }
+
+    #cal-container {
+      width: 100%;
+      display: flex;
       flex-direction: column;
-      justify-content: center;
+      align-items: center;
       gap: 14px;
+      transform-origin: center center;
     }
 
     .cal-header-guide {
@@ -277,12 +293,15 @@
 
     #page-dots {
       position: fixed;
-      bottom: 16px;
-      left: 50%;
-      transform: translateX(-50%);
+      left: 0;
+      right: 0;
+      bottom: calc(max(16px, env(safe-area-inset-bottom)) + 14px);
       display: flex;
+      justify-content: center;
       gap: 8px;
       z-index: 10;
+      pointer-events: none;
+      transition: transform 3s ease-in-out;
     }
 
     .dot {
@@ -399,6 +418,7 @@
     <div id="slider">
       <!-- 1페이지: 시계 & D-Day & 날씨 -->
       <div class="page">
+        <div class="shift-box" id="aod-shift">
         <div id="aod-container">
           <div id="date">2026년 11월 15일 일요일</div>
           <div id="clock-wrapper">
@@ -412,10 +432,13 @@
           <div id="current-weather">날씨 불러오는 중...</div>
           <div id="hourly-weather"></div>
         </div>
+        </div>
       </div>
 
       <!-- 2페이지: 싱글 월 달력 -->
       <div class="page" id="calendar-page">
+        <div class="shift-box" id="cal-shift">
+        <div id="cal-container">
         <div class="cal-header-guide">↕ 위아래로 밀거나 버튼을 눌러 달을 변경하세요 (우로 밀어 시계 복귀)</div>
         <div class="month-container">
           <div class="month-header-nav">
@@ -427,6 +450,8 @@
             <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
           </div>
           <div class="days-grid" id="single-days-grid"></div>
+        </div>
+        </div>
         </div>
       </div>
     </div>
@@ -461,11 +486,25 @@
     const DEFAULT_LON = 126.7660;
     const DEFAULT_LOCATION_NAME = "부천시";
     const SWIPE_THRESHOLD = 50;   // 스와이프로 인정할 최소 이동 거리(px)
+
+    // --- 화면 자동 맞춤 ---
+    const FIT_RATIO_LANDSCAPE = 0.8; // 가로 화면에서 내용이 차지할 비율 (0~1)
+    const FIT_RATIO_PORTRAIT = 0.9;  // 세로 화면에서 내용이 차지할 비율 (0~1)
+    const MIN_SCALE = 0.3;
+    const MAX_SCALE = 4;
+
+    // --- 번인 방지 ---
+    const SHIFT_INTERVAL_SEC = 60;   // 위치를 옮기는 주기(초)
+    const SHIFT_RANGE_RATIO = 0.06;  // 화면 짧은 변 대비 최대 이동 범위
     // ==========================================
 
     const masterWrapper = document.getElementById('master-wrapper');
     const slider = document.getElementById('slider');
     const aodContainer = document.getElementById('aod-container');
+    const aodShift = document.getElementById('aod-shift');
+    const calContainer = document.getElementById('cal-container');
+    const calShift = document.getElementById('cal-shift');
+    const pageDots = document.getElementById('page-dots');
     const clockEl = document.getElementById('clock');
     const secondsEl = document.getElementById('seconds');
     const dateEl = document.getElementById('date');
@@ -533,7 +572,7 @@
     }
 
     function pageWidth() {
-      return window.innerWidth;
+      return masterWrapper.clientWidth;
     }
 
     function setSliderOffset(px) {
@@ -641,18 +680,6 @@
       document.getElementById('dot-1').classList.toggle('active', pageIndex === 1);
       if (pageIndex === 1) renderSingleMonth();
     }
-
-    // 화면 회전/크기 변경 시 위치 보정
-    window.addEventListener('resize', () => {
-      slider.classList.remove('animating');
-      setSliderOffset(-currentPage * pageWidth());
-    });
-    window.addEventListener('orientationchange', () => {
-      setTimeout(() => {
-        slider.classList.remove('animating');
-        setSliderOffset(-currentPage * pageWidth());
-      }, 200);
-    });
 
     function changeMonth(delta) {
       calendarViewDate.setDate(1);
@@ -829,10 +856,97 @@
       modalBackdrop.classList.remove('open');
     });
 
+    // ==========================================
+    // 화면 자동 맞춤 + 번인 방지 위치 이동
+    // ==========================================
+    const fitState = new Map();
+    let layoutQueued = false;
+    let lastW = 0;
+    let lastShift = { x: 0, y: 0 }; // -1 ~ 1 정규화 좌표
+
+    // 고정 폭(designW)으로 배치한 내용을 화면 크기에 맞춰 확대/축소
+    function fitBlock(shiftEl, fitEl, designW, ratio) {
+      const page = shiftEl.parentElement;
+      const cs = getComputedStyle(page);
+      const availW = page.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      const availH = page.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+      if (availW <= 0 || availH <= 0) return;
+
+      shiftEl.style.width = designW + 'px';
+      const natW = Math.max(designW, fitEl.scrollWidth);
+      const natH = fitEl.offsetHeight || 1;
+      let s = Math.min(availW * ratio / natW, availH * ratio / natH);
+      s = Math.max(MIN_SCALE, Math.min(MAX_SCALE, s));
+      fitEl.style.transform = `scale(${s})`;
+
+      fitState.set(shiftEl, {
+        freeX: Math.max(0, (availW - natW * s) / 2),
+        freeY: Math.max(0, (availH - natH * s) / 2)
+      });
+    }
+
+    function applyLayout() {
+      layoutQueued = false;
+      const w = masterWrapper.clientWidth;
+      const h = masterWrapper.clientHeight;
+      if (!w || !h) return;
+
+      const portrait = h > w;
+      const ratio = portrait ? FIT_RATIO_PORTRAIT : FIT_RATIO_LANDSCAPE;
+      fitBlock(aodShift, aodContainer, portrait ? 520 : 820, ratio);
+      fitBlock(calShift, calContainer, portrait ? 440 : 540, ratio);
+
+      if (w !== lastW) {
+        lastW = w;
+        slider.classList.remove('animating');
+        setSliderOffset(-currentPage * w);
+      }
+      applyShift();
+    }
+
+    function scheduleLayout() {
+      if (layoutQueued) return;
+      layoutQueued = true;
+      requestAnimationFrame(applyLayout);
+    }
+
+    // 이전 위치에서 충분히 먼 곳을 골라 같은 픽셀이 계속 켜져 있지 않게 함
+    function pickShift() {
+      let best = lastShift, bestD = -1;
+      for (let i = 0; i < 12; i++) {
+        const c = { x: Math.random() * 2 - 1, y: Math.random() * 2 - 1 };
+        const d = Math.hypot(c.x - lastShift.x, c.y - lastShift.y);
+        if (d > bestD) { best = c; bestD = d; }
+        if (d >= 1) break;
+      }
+      return best;
+    }
+
+    function applyShift() {
+      const short = Math.min(masterWrapper.clientWidth, masterWrapper.clientHeight);
+      const cap = Math.max(6, Math.min(60, short * SHIFT_RANGE_RATIO));
+      [aodShift, calShift].forEach((el) => {
+        const f = fitState.get(el) || { freeX: 0, freeY: 0 };
+        const mx = Math.min(cap, f.freeX);
+        const my = Math.min(cap, f.freeY);
+        el.style.transform = `translate(${Math.round(lastShift.x * mx)}px, ${Math.round(lastShift.y * my)}px)`;
+      });
+      const d = Math.min(cap, 12);
+      pageDots.style.transform = `translate(${Math.round(lastShift.x * d)}px, ${Math.round(lastShift.y * d)}px)`;
+    }
+
     function shiftPosition() {
-      const offsetX = Math.floor(Math.random() * 31) - 15;
-      const offsetY = Math.floor(Math.random() * 31) - 15;
-      aodContainer.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+      lastShift = pickShift();
+      applyShift();
+    }
+
+    window.addEventListener('resize', scheduleLayout);
+    window.addEventListener('orientationchange', () => setTimeout(scheduleLayout, 200));
+    if ('ResizeObserver' in window) {
+      const ro = new ResizeObserver(scheduleLayout);
+      ro.observe(masterWrapper);
+      ro.observe(aodContainer);
+      ro.observe(calContainer);
     }
 
     function initLocationAndWeather() {
@@ -921,10 +1035,19 @@
       return { icon: '☁️', text: '흐림' };
     }
 
+    let wakeLockSentinel = null;
+    let wakeLockPending = false;
     async function requestWakeLock() {
+      if (!('wakeLock' in navigator) || wakeLockSentinel || wakeLockPending) return;
+      wakeLockPending = true;
       try {
-        if ('wakeLock' in navigator) await navigator.wakeLock.request('screen');
-      } catch (err) {}
+        wakeLockSentinel = await navigator.wakeLock.request('screen');
+        wakeLockSentinel.addEventListener('release', () => { wakeLockSentinel = null; });
+      } catch (err) {
+        wakeLockSentinel = null;
+      } finally {
+        wakeLockPending = false;
+      }
     }
 
     // 초기 실행
@@ -932,8 +1055,9 @@
     setInterval(updateClockAndDDay, 1000);
 
     renderSingleMonth();
+    applyLayout();
     shiftPosition();
-    setInterval(shiftPosition, 120000);
+    setInterval(shiftPosition, SHIFT_INTERVAL_SEC * 1000);
 
     initLocationAndWeather();
     setInterval(initLocationAndWeather, 1800000);
